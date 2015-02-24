@@ -1,18 +1,25 @@
+NVCC=/usr/local/cuda-6.0/bin/nvcc  -ccbin g++ -m64
 CXX = g++
-CXXFLAGS = -O2 -fopenmp -Wall
+CXXFLAGS = -O2 -Wall
 SRCS = $(wildcard *.cxx)
+SRCS2 = $(wildcard *.cu)
 PROG = boids
 OBJS = $(SRCS:%.cxx=%.o)
-LDFLAGS = -lm -g -pg -fopenmp -o $(PROG)
+OBJS2 = $(SRCS2:%.cu=%.o)
 
-$(PROG): $(OBJS)
-	$(CXX) $(OBJS) $(LDFLAGS)
+LDFLAGS = -lm -lcuda -g -pg -o $(PROG)
+
+$(PROG): $(OBJS) $(OBJS2)
+	$(CXX) $(OBJS) $(OBJS2) $(LDFLAGS)
 
 %.o:%.cxx
-	$(CXX) -c $(CXXFLAGS) $<
+	$(CXX) -c $<
+
+%.o:%.cu
+	$(NVCC) -c $<
 
 test: $(PROG)
 	./$(PROG)
 
 clean:
-	rm -f $(OBJS) $(PROG) *~
+	rm -f $(OBJS) $(OBJS2) $(PROG) *~

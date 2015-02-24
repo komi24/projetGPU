@@ -15,7 +15,7 @@ Agent::Agent(const Vector &pos, const Vector &vel, const Vector &dir){
 
 
 
-__device__ Vector Agent::separation(TemporaryContainer &agent_list, double rad) {
+Vector Agent::separation(TemporaryContainer &agent_list, double rad) {
 
 
 Vector force = Zeros();
@@ -72,7 +72,7 @@ Vector force = Zeros();
 }*/
 
 
-__device__ Vector Agent::cohesion(TemporaryContainer &agent_list,  double rad) {
+Vector Agent::cohesion(TemporaryContainer &agent_list,  double rad) {
 
 Vector force = Zeros();
   //int count = 0;
@@ -127,7 +127,8 @@ Vector force = Zeros();
 }*/
 
 
-__device__ Vector Agent::alignment(TemporaryContainer&agent_list, double rad) {
+
+Vector Agent::alignment(TemporaryContainer&agent_list, double rad) {
 Vector force = Zeros();
   //int count = 0;
     for(size_t i = 0; i < agent_list.size(); i++) {

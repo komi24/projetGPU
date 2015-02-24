@@ -64,7 +64,8 @@ void  Workspace::init(){
 
       // Create random velocity
       
-        oc.add(new Agent(position, Zeros(), Zeros()));
+	Agent *agt = new Agent(position,Zeros(),Zeros());
+        oc.add(*agt);
       }
     //}
 
@@ -83,7 +84,7 @@ void  Workspace::init(){
 }
 
 Agent *Workspace::tempToArray(TemporaryContainer tp){
-  Agent *res = malloc(tp.size()*sizeof(Agent));
+  Agent *res = (Agent*) malloc(tp.size()*sizeof(Agent));
   for(int i =0; i<tp.size(); i++)
     res[i]=*tp[i];
   return res;
@@ -116,13 +117,13 @@ void Workspace::move(int step)//TODO erase step (just for tests)
     TemporaryContainer agentsleaf = (it)->agents;
 
     //Chargement mémoire sur GPU
-    Agent *neighArray=tempToCont(nb);
-    Agent *leafArray=tempToCont(leafs[i]->agents);
-    Container *d_neighArray;
-    Container *d_leafArray;
+    Agent *neighArray=tempToArray(nb);
+    Agent *leafArray=tempToArray(leafs[i]->agents);
+    Agent *d_neighArray;
+    Agent *d_leafArray;
     //TODO penser à supprimer les liste d'agents copiés
-    CudaMalloc((void **)&d_neighArray,sizeof(Agent)*nb.size());
-    CudaMalloc((void **)&d_leafArray,sizeof(Agent)*leafs[i]->agents.size());
+    cudaMalloc((void **)&d_neighArray,sizeof(Agent)*nb.size());
+    cudaMalloc((void **)&d_leafArray,sizeof(Agent)*leafs[i]->agents.size());
     cudaMemcpy(d_neighArray,neighArray,sizeof(Agent)*nb.size(), cudaMemcpyHostToDevice);
     cudaMemcpy(d_leafArray,leafArray,sizeof(Agent)*leafs[i]->agents.size(), cudaMemcpyHostToDevice);
 
@@ -187,21 +188,21 @@ void Workspace::returnNeighboursBuffer(TemporaryContainer &nb, Agent *agent,
 
 void Workspace::update(){
   //#pragma omp parallel for
+  LeafContainer leafs = Octree::leafs;
 
    for (size_t i=0; i<leafs.size(); i++){
     Octree *lf=leafs[i];
       for (size_t j = 0; j < lf->agents.size(); j++){
-        if (lf->position > lf->agents[j]->position[Agent::curr_state] ||
-         lf->agents[j]->position[Agent::curr_state] >= (lf->position + Vector(1,1,1)*lf->width))){
-         | (agents[k].position[Agent::curr_state] >= (lf->position + Vector(1,1,1)*lf->width))) {
+        if ((lf->position > lf->agents[j]->position[Agent::curr_state]) ||
+         (lf->agents[j]->position[Agent::curr_state] >= (lf->position + Vector(1,1,1)*lf->width))){      
         lf->agents.erase(std::find(lf->agents.begin(),
           lf->agents.end(),
-          &(lf->agents[j])));
+          lf->agents[j]));
         //lf->agents.remove(&agents[k]);
         lf->delete_leaves();
-        oc.add( lf->agents[j]);
+        oc.add(*lf->agents[j]);
       } else {
-         lf->agents[j].leaf[Agent::curr_state]=lf;
+         lf->agents[j]->leaf[Agent::curr_state]=lf;
       }   
     }
       }
@@ -228,7 +229,6 @@ void Workspace::update(){
 void Workspace::simulate(int nsteps) {
   // store initial position[Agent::curr_state]s
     save(0);
-    Tester tst;
 
     // perform nsteps time steps of the simulation
     int step = 0;
@@ -243,7 +243,7 @@ void Workspace::simulate(int nsteps) {
 
 void Workspace::save(int stepid) {
   std::ofstream myfile;
-
+  LeafContainer leafs=Octree::leafs;
   myfile.open("boids2.xyz", stepid==0 ? std::ios::out : std::ios::app);
 
     myfile << std::endl;
@@ -252,9 +252,7 @@ void Workspace::save(int stepid) {
     Octree *lf=leafs[i];
       for (size_t j = 0; j < lf->agents.size(); j++)
         myfile << "B " << lf->agents[j]->position[Agent::curr_state];
-
-   /* for (size_t p=0; p<na; p++)
-
-
+}
     myfile.close();
-  }
+}
+

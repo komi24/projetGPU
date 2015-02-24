@@ -33,7 +33,7 @@ void Tester::testConstruction(){
 }
 
 void Tester::testUpdate(){
-	Workspace wkspce(3,1,1,1,0.01,0.05,0.02);
+  /*	Workspace wkspce(3,1,1,1,0.01,0.05,0.02);
 	srand48(std::time(0)+100);
 	printOctree(&(wkspce.oc));
 	Agent::curr_state = 1- Agent::curr_state;
@@ -43,14 +43,14 @@ void Tester::testUpdate(){
 		std::cout << " Nouvelle position " << wkspce.agents[k].position[Agent::curr_state] <<std::endl <<std::endl;
 	}
 	wkspce.update();
-	printOctree(&(wkspce.oc));
+	printOctree(&(wkspce.oc));*/
 }
 
 void Tester::printContainer(TemporaryContainer &c){
 	std::cout << " liste des agents"<< std::endl;
 	for (TemporaryContainer::iterator it = c.begin(); it != c.end(); it++){
 		std::cout << "	Agent " << " position " << (*it)->position[Agent::curr_state] << std::endl;
-	}	
+		} 
 }
 
 /*void Tester::testConstruction2(){
