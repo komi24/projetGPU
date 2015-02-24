@@ -10,7 +10,7 @@ OBJS2 = $(SRCS2:%.cu=%.o)
 LDFLAGS = -lm -lcuda -g -pg -o $(PROG)
 
 $(PROG): $(OBJS) $(OBJS2)
-	$(CXX) $(OBJS) $(OBJS2) $(LDFLAGS)
+	$(NVCC) $(OBJS) $(OBJS2) $(LDFLAGS)
 
 %.o:%.cxx
 	$(CXX) -c $<
