@@ -13,7 +13,7 @@ class Workspace
 {
 //protected:
 public:
-  Container agents;
+
   /* Spatial data structure for agent search */
  
   
@@ -48,6 +48,9 @@ void returnNeighboursBuffer(TemporaryContainer &nb, Agent *agent,
   Real rc, TemporaryContainer &bufC,
   Real ra, TemporaryContainer &bufA,
   Real rs, TemporaryContainer &bufS);
+
+Agent *tempToArray(TemporaryContainer tp);
+void arrayToTemp(Agent *agts, int s,TemporaryContainer &leaf);
   
   void move(int step);
   void move2(int step);

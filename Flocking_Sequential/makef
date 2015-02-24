@@ -1,0 +1,30 @@
+# extra flags pour le link
+LDFLAGS =
+
+# Flags pour la compilation
+CFLAGS =
+
+CC = gcc
+NVCC=/usr/local/cuda-6.5/bin/nvcc  -ccbin g++ -m64
+NVCCFLAGS=
+
+## liste des exécutables à créer
+SRC = $(wildcard *.cu)
+OBJ = $(SRC:.c=.o)
+EXEC = cuda_info
+
+all : $(EXEC)
+
+cuda_info: cuda_info.o
+	$(NVCC) $(LDFLAGS)  -o $@ $+
+
+%.o: %.cu
+	$(NVCC) $(NVCCFLAGS) -c $<
+
+clean:
+		rm -f *.o
+
+mrproper: clean
+		rm $(EXEC)
+
+
