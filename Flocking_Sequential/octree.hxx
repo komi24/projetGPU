@@ -3,9 +3,9 @@
 
 #include <list> 
 #include <vector>
-#include "vector.hxx"
+#include "vector.cuh"
 #include "types.hxx"
-#include "agent.hxx"
+#include "agent.cuh"
 //class Agent;
 class Octree;
 

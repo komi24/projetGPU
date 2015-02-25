@@ -4,7 +4,8 @@
 #include <deque>
 #include <vector>
 #include "types.hxx"
-#include "vector.hxx"
+#include "vector.cuh"
+#include <cuda.h>
 
 typedef enum {
   prey,
@@ -37,9 +38,12 @@ class Agent{
 
     Agent(const Vector &pos, const Vector &vel, const Vector &dir);
 
-    Vector separation(TemporaryContainer &agent_list,  double dist);
-    Vector cohesion(TemporaryContainer &agent_list, double dist);
-    Vector alignment(TemporaryContainer &agent_list, double dist);
+    __device__  Vector separation(Agent *agent_list, int sizeNeigh, 
+            Real *dist, Real rad, int curr); 
+    __device__  Vector cohesion(Agent *agent_list, int sizeNeigh, 
+            Real *dist, Real rad, int curr); 
+    __device__  Vector alignment(Agent *agent_list, int sizeNeigh, 
+            Real *dist, Real rad, int curr); 
     //size_t find_closest(Container &agent_list, size_t index);
 
 /*    bool operator==( const Vector& rhs ) const {

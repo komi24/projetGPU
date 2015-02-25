@@ -1,4 +1,4 @@
-NVCC=/usr/local/cuda-6.0/bin/nvcc  -ccbin g++ -m64
+NVCC=/usr/local/cuda-6.0/bin/nvcc -arch=sm_20 -ccbin g++ -m64
 CXX = g++
 CXXFLAGS =  -Wall
 SRCS = $(wildcard *.cxx)
@@ -13,7 +13,7 @@ $(PROG): $(OBJS) $(OBJS2)
 	$(NVCC) $(OBJS) $(OBJS2) $(LDFLAGS)
 
 %.o:%.cxx
-	$(CXX) -c $<
+	$(NVCC) -c $<
 
 %.o:%.cu
 	$(NVCC) -c $<

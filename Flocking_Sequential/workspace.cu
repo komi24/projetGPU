@@ -5,8 +5,8 @@
 #include <omp.h>
 
 #include "workspace.hxx"
-#include "agent.hxx"
-#include "vector.hxx"
+#include "agent.cuh"
+#include "vector.cuh"
 #include "tester.hxx"
 //#include "octree.hxx"
 
@@ -100,16 +100,96 @@ void Workspace::arrayToTemp(Agent *agts, int s,TemporaryContainer &leaf){
   for(int i =0; i<s; i++)
   {
     leaf.push_back(&agts[i]);
-    std::cerr << agts[i].position[0].x << " GPU" << std::endl;
+    std::cerr << agts[i].position[1-Agent::curr_state].x << " GPU" << std::endl;
   }
     
 }
 
 
-__global__ void computeOnGPU(Real r, Agent *agts){
-  int *t = (int*) agts;
-  for (int i=0; i<sizeof(Agent)/sizeof(int); i++)
-      t[i]=0;
+
+__device__  Vector separation(Agent &a, Agent *agent_list, int sizeNeigh, Real *dist, Real rad, int curr) {
+
+    Vector force = Vector();
+    int count =0;
+    for(size_t i = 0; i < sizeNeigh; i++) {
+        //double dist = (a.position[this->curr_state] - agent_list[i]->position[this->curr_state]).norm();
+        if ((dist[i] < rad) && (0<dist[i])) {
+            // TODO the comparison is no longer needed //
+            force -= (a.position[curr] - agent_list[i].position[curr]).normalized();
+            ++count;
+        }
+    }
+    return ( count >0 ? force/count : force);
+
+}
+
+
+__device__ Vector cohesion(Agent &a,Agent *agent_list, int sizeNeigh, Real *dist, Real rad, int curr) {
+
+    Vector force;
+    int count = 0;
+    for(size_t i = 0; i < sizeNeigh; i++) {
+        //double dist = (a.position[this->curr_state] - agent_list[i]->position[this->curr_state]).norm();
+        if ((dist[i] < rad) && (0<dist[i])) {
+            // TODO the comparison is no longer needed //
+            force += agent_list[i].position[curr];
+            ++count;
+        }
+    }
+    return ( count >0 ? force/count : force);
+}
+
+__device__ Vector alignment(Agent &a,Agent *agent_list, int sizeNeigh, Real *dist, Real rad, int curr) {
+    Vector force;
+    int count = 0;
+    for(size_t i = 0; i < sizeNeigh; i++) {
+        if ((dist[i] < rad) && (0<dist[i])) {
+            // TODO the comparison is no longer needed //
+            force += agent_list[i].velocity[curr];
+            ++count;
+        }
+    }
+    return ( count >0 ? force/count : force);
+}
+
+__global__ void computeOnGPU(int sizeNb, int sizeLf, 
+        Agent *agts, Agent *neigh, 
+        Real rs, Real rc, Real ra, 
+        Real wSeparation, Real wCohesion, Real wAlignment, 
+        int curr, Real maxU,Real dt){
+
+    int tileWidth = sizeNb/sizeLf;
+    __shared__ Agent *ds_neigh;
+    ds_neigh = (Agent*) malloc(sizeof(Agent)*(tileWidth)); // Faire gaffe un seul thread
+    __shared__ Real *ds_dist;
+    ds_dist = (Real *) malloc(sizeof(Real)*(tileWidth));
+    Vector s, c, a;
+
+    //Chargement mémoire
+    for (int i= 0; i<tileWidth; i++){
+        ds_neigh[i]=neigh[blockIdx.x*tileWidth+i];
+    }
+    __syncthreads();
+    //Calcul des distances
+    for (int i= 0; i<tileWidth; i++){
+        ds_dist[i]=(agts[blockIdx.x].position[curr]-ds_neigh[blockIdx.x*tileWidth+i].position[curr]).norm();//TODO passer norm en __global__
+    }
+    __syncthreads();
+    //Calcul des forces 
+    //s =
+    s =  separation(agts[blockIdx.x],ds_neigh,tileWidth, ds_dist, rs, curr);
+    c = cohesion(agts[blockIdx.x],ds_neigh,tileWidth, ds_dist, rc, curr);
+    a = alignment(agts[blockIdx.x],ds_neigh,tileWidth, ds_dist, ra, curr);
+    agts[blockIdx.x].direction[1-curr] = c*wCohesion + a*wAlignment + s*wSeparation;
+
+    agts[blockIdx.x].velocity[1-curr] = agts[blockIdx.x].velocity[curr] 
+        + agts[blockIdx.x].direction[1-curr];
+     float speed =agts[blockIdx.x].velocity[1-curr].norm();
+       if ((speed > maxU)) {
+         agts[blockIdx.x].velocity[1-curr] = agts[blockIdx.x].velocity[1-curr] * maxU/speed;
+      }
+      agts[blockIdx.x].position[1-curr] = agts[blockIdx.x].position[curr] + agts[blockIdx.x].velocity[curr]*dt;
+    __syncthreads();
   
 }
 
@@ -128,22 +208,30 @@ void Workspace::move(int step)//TODO erase step (just for tests)
     //Chargement mémoire sur GPU
     Agent *neighArray=tempToArray(nb);
     Agent *leafArray=tempToArray(leafs[i]->agents);
+
     Agent *d_neighArray;
     Agent *d_leafArray;
+
     //TODO penser à supprimer les liste d'agents copiés
     cudaMalloc((void **)&d_neighArray,sizeof(Agent)*nb.size());
     cudaMalloc((void **)&d_leafArray,sizeof(Agent)*leafs[i]->agents.size());
     cudaMemcpy(d_neighArray,neighArray,sizeof(Agent)*nb.size(), cudaMemcpyHostToDevice);
     cudaMemcpy(d_leafArray,leafArray,sizeof(Agent)*leafs[i]->agents.size(), cudaMemcpyHostToDevice);
-
+    
     //Initialiser la grille
-    dim3 dimGrid(1,1,1);
+    dim3 dimGrid(leafs[i]->agents.size(),1,1);
     dim3 dimBlock(1,1,1);
 
-    computeOnGPU<<<dimGrid,dimBlock>>>(0.25,d_leafArray);
+    computeOnGPU<<<dimGrid,dimBlock>>>(nb.size(), leafs[i]->agents.size(), 
+        d_leafArray, d_neighArray, 
+         rSeparation,  rCohesion,  rAlignment, 
+         wSeparation,  wCohesion,  wAlignment, 
+         Agent::curr_state,maxU,dt);
     cudaThreadSynchronize();
-    cudaMemcpy(d_leafArray,leafArray,sizeof(Agent)*leafs[i]->agents.size(), cudaMemcpyDeviceToHost);
+    cudaMemcpy(leafArray,d_leafArray,sizeof(Agent)*leafs[i]->agents.size(), cudaMemcpyDeviceToHost);
+  
     arrayToTemp(leafArray,leafs[i]->agents.size(),leafs[i]->agents);
+
       for(size_t j=0; j<agentsleaf.size(); j++){
        Agent *it2=agentsleaf[j];
       /* TemporaryContainer bufA,bufC,bufS;
@@ -173,7 +261,7 @@ void Workspace::move(int step)//TODO erase step (just for tests)
 
     }
 
-    //Agent::curr_state = 1 - Agent::curr_state;
+    Agent::curr_state = 1 - Agent::curr_state;
     update();
 }
 

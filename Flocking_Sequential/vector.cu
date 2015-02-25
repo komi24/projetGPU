@@ -1,4 +1,4 @@
-#include "vector.hxx"
+#include "vector.cuh"
 
 Vector& Zeros()
 {
@@ -6,7 +6,7 @@ Vector& Zeros()
   return u;
 }
 
-Vector operator*( Real s, Vector &u) {
+__device__ __host__ Vector operator*( Real s, Vector &u) {
   return u*s;
 }
 std::ostream &operator<< (std::ostream &stream, const Vector & u){

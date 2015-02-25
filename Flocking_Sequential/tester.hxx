@@ -1,7 +1,7 @@
 #ifndef TESTER
 #define TESTER
 
-#include "agent.hxx"
+#include "agent.cuh"
 
 
 
