@@ -84,24 +84,33 @@ void  Workspace::init(){
 }
 
 Agent *Workspace::tempToArray(TemporaryContainer tp){
+ std::cerr << " CPU" << std::endl;
   Agent *res = (Agent*) malloc(tp.size()*sizeof(Agent));
-  for(int i =0; i<tp.size(); i++)
+  for(int i =0; i<tp.size(); i++){
     res[i]=*tp[i];
+    std::cerr << tp[i]->position[0].x << " CPU" << std::endl;
+  }
+
   return res;
 }
 
 void Workspace::arrayToTemp(Agent *agts, int s,TemporaryContainer &leaf){
   leaf.clear();
+ std::cerr << " GPU" << std::endl;
   for(int i =0; i<s; i++)
   {
     leaf.push_back(&agts[i]);
+    std::cerr << agts[i].position[0].x << " GPU" << std::endl;
   }
     
 }
 
 
 __global__ void computeOnGPU(Real r, Agent *agts){
-  agts[blockIdx.x].position[0].x+=r;
+  int *t = (int*) agts;
+  for (int i=0; i<sizeof(Agent)/sizeof(int); i++)
+      t[i]=0;
+  
 }
 
 void Workspace::move(int step)//TODO erase step (just for tests)
@@ -128,7 +137,7 @@ void Workspace::move(int step)//TODO erase step (just for tests)
     cudaMemcpy(d_leafArray,leafArray,sizeof(Agent)*leafs[i]->agents.size(), cudaMemcpyHostToDevice);
 
     //Initialiser la grille
-    dim3 dimGrid(leafs[i]->agents.size(),1,1);
+    dim3 dimGrid(1,1,1);
     dim3 dimBlock(1,1,1);
 
     computeOnGPU<<<dimGrid,dimBlock>>>(0.25,d_leafArray);
@@ -237,7 +246,7 @@ void Workspace::simulate(int nsteps) {
       this->move(step);
       //tst.printOctree(& this->oc);
       // store every 20 steps
-      if (step%5 == 0) save(step);
+      if (step%1 == 0) save(step);
     }
 }
 

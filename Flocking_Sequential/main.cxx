@@ -22,8 +22,8 @@ int main(int argc, char **argv) {
   beg = time(NULL);
 
   // Add options to parser
-  parser.addOption("agents", 5);//640 originally
-  parser.addOption("steps", 50);//500
+  parser.addOption("agents", 50);//640 originally
+  parser.addOption("steps", 5);//500
   parser.addOption("wc", 12);
   parser.addOption("wa", 15);
   parser.addOption("ws", 35);

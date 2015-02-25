@@ -8,6 +8,6 @@
 // Forward declaration
 //class Agent;
 
-typedef double Real;
+typedef float Real;
 
 #endif

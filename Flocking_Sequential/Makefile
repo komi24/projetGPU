@@ -1,6 +1,6 @@
 NVCC=/usr/local/cuda-6.0/bin/nvcc  -ccbin g++ -m64
 CXX = g++
-CXXFLAGS = -O2 -Wall
+CXXFLAGS =  -Wall
 SRCS = $(wildcard *.cxx)
 SRCS2 = $(wildcard *.cu)
 PROG = boids
