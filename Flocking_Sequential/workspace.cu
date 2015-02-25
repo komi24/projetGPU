@@ -88,7 +88,8 @@ Agent *Workspace::tempToArray(TemporaryContainer tp){
   Agent *res = (Agent*) malloc(tp.size()*sizeof(Agent));
   for(int i =0; i<tp.size(); i++){
     res[i]=*tp[i];
-    std::cerr << tp[i]->position[0].x << " CPU" << std::endl;
+    std::cerr << tp[i]->position[Agent::curr_state].x << " CPU" << std::endl;
+   
   }
 
   return res;
@@ -100,7 +101,9 @@ void Workspace::arrayToTemp(Agent *agts, int s,TemporaryContainer &leaf){
   for(int i =0; i<s; i++)
   {
     leaf.push_back(&agts[i]);
-    std::cerr << agts[i].position[1-Agent::curr_state].x << " GPU" << std::endl;
+    std::cerr << agts[i].position[Agent::curr_state].x << " GPU" << std::endl;
+       std::cerr << agts[i].position[1- Agent::curr_state].x << " 1- curr GPU" << std::endl;
+   
   }
     
 }
@@ -157,8 +160,7 @@ __global__ void computeOnGPU(int sizeNb, int sizeLf,
         Real rs, Real rc, Real ra, 
         Real wSeparation, Real wCohesion, Real wAlignment, 
         int curr, Real maxU,Real dt){
-
-    int tileWidth = sizeNb/sizeLf;
+ int tileWidth = sizeNb/sizeLf;
     __shared__ Agent *ds_neigh;
     ds_neigh = (Agent*) malloc(sizeof(Agent)*(tileWidth)); // Faire gaffe un seul thread
     __shared__ Real *ds_dist;
@@ -189,12 +191,14 @@ __global__ void computeOnGPU(int sizeNb, int sizeLf,
          agts[blockIdx.x].velocity[1-curr] = agts[blockIdx.x].velocity[1-curr] * maxU/speed;
       }
       agts[blockIdx.x].position[1-curr] = agts[blockIdx.x].position[curr] + agts[blockIdx.x].velocity[curr]*dt;
+      
     __syncthreads();
   
 }
 
 void Workspace::move(int step)//TODO erase step (just for tests)
 {
+
   Vector s,c,a;  
   LeafContainer leafs = Octree::leafs;
   TemporaryContainer nb;
@@ -208,11 +212,11 @@ void Workspace::move(int step)//TODO erase step (just for tests)
     //Chargement mémoire sur GPU
     Agent *neighArray=tempToArray(nb);
     Agent *leafArray=tempToArray(leafs[i]->agents);
-
+ 
     Agent *d_neighArray;
     Agent *d_leafArray;
 
-    //TODO penser à supprimer les liste d'agents copiés
+    //TODO penser à supprimer les liste d'agents copiées
     cudaMalloc((void **)&d_neighArray,sizeof(Agent)*nb.size());
     cudaMalloc((void **)&d_leafArray,sizeof(Agent)*leafs[i]->agents.size());
     cudaMemcpy(d_neighArray,neighArray,sizeof(Agent)*nb.size(), cudaMemcpyHostToDevice);
