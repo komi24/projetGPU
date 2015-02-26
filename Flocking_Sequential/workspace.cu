@@ -89,7 +89,7 @@ Agent *Workspace::tempToArray(TemporaryContainer tp){
   Agent *res = (Agent*) malloc(tp.size()*sizeof(Agent));
   for(int i =0; i<tp.size(); i++){
     res[i]=*tp[i];
-    std::cerr << tp[i]->position[Agent::curr_state].x << " CPU" << std::endl;
+    //std::cerr << tp[i]->position[Agent::curr_state].x << " CPU" << std::endl;
    
   }
 
@@ -102,8 +102,8 @@ void Workspace::arrayToTemp(Agent *agts, int s,TemporaryContainer &leaf){
   for(int i =0; i<s; i++)
   {
     leaf.push_back(&agts[i]);
-    std::cerr << agts[i].position[Agent::curr_state].x << " GPU" << std::endl;
-       std::cerr << agts[i].position[1- Agent::curr_state].x << " 1- curr GPU" << std::endl;
+    //std::cerr << agts[i].position[Agent::curr_state].x << " GPU" << std::endl;
+    //std::cerr << agts[i].position[1- Agent::curr_state].x << " 1- curr GPU" << std::endl;
    
   }
     
@@ -162,7 +162,7 @@ __global__ void computeOnGPU(int sizeNb, int sizeLf,
         Real wSeparation, Real wCohesion, Real wAlignment, 
         int curr, Real maxU,Real dt){
     int tileWidth = sizeNb/sizeLf;
-    __shared__ Real ds_neighInst[BUFF_SIZE*sizeof(Agent)/sizeof(Real)];
+    __shared__ Real ds_neighInst[BUFF_SIZE*sizeof(Agent)/sizeof(Real)];//TODO mettre à zero les champs
     __shared__ Agent *ds_neigh;
     ds_neigh = (Agent *) ds_neighInst;
     //ds_neigh = (Agent*) malloc(sizeof(Agent)*(tileWidth)); // Faire gaffe un seul thread
@@ -240,30 +240,21 @@ void Workspace::move(int step)//TODO erase step (just for tests)
         std::cerr << cudaGetErrorString(err) << std::endl;
     cudaThreadSynchronize();
     cudaMemcpy(leafArray,d_leafArray,sizeof(Agent)*leafs[i]->agents.size(), cudaMemcpyDeviceToHost);
+
   
     arrayToTemp(leafArray,leafs[i]->agents.size(),leafs[i]->agents);
 
+    cudaFree(d_neighArray);
+    //cudaFree(neighArray);
+    cudaFree(d_leafArray);
+    //cudaFree(leafArray);
+
+    cudaThreadSynchronize();
+
       for(size_t j=0; j<agentsleaf.size(); j++){
-       Agent *it2=agentsleaf[j];
-      /* TemporaryContainer bufA,bufC,bufS;
-       returnNeighboursBuffer(nb, it2,
-        rCohesion, bufC,
-        rAlignment, bufA,
-        rSeparation, bufS);
-       s = (it2)->separation(bufS, rSeparation);
-       c = (it2)->cohesion(bufC, rCohesion);
-       a = (it2)->alignment(bufA, rAlignment);
-       (it2)->direction[1-Agent::curr_state] = wCohesion*c + wAlignment*a + wSeparation*s;
 
-       (it2)->velocity[1-Agent::curr_state] = (it2)->velocity[Agent::curr_state] + (it2)->direction[1-Agent::curr_state];
+       Agent *it2=leafs[i]->agents[j];
 
-       double speed = (it2)->velocity[1-Agent::curr_state].norm();
-       if ((speed > maxU)) {
-          (it2)->velocity[1-Agent::curr_state] = (it2)->velocity[1-Agent::curr_state] * maxU/speed;
-      }
-
-      (it2)->position[1-Agent::curr_state] = (it2)->position[Agent::curr_state] + dt*(it2)->velocity[Agent::curr_state];
-*/
       (it2)->position[1-Agent::curr_state].x= fmod((it2)->position[1-Agent::curr_state].x,domainsize);
       (it2)->position[1-Agent::curr_state].y= fmod((it2)->position[1-Agent::curr_state].y,domainsize);
       (it2)->position[1-Agent::curr_state].z= fmod((it2)->position[1-Agent::curr_state].z,domainsize);
@@ -273,7 +264,9 @@ void Workspace::move(int step)//TODO erase step (just for tests)
     }
 
     Agent::curr_state = 1 - Agent::curr_state;
+    std::cerr << "ok1" << std::endl;
     update();
+    std::cerr << "ok2" << std::endl;
 }
 
 void Workspace::returnNeighboursBuffer(TemporaryContainer &nb, Agent *agent,
@@ -301,16 +294,21 @@ void Workspace::update(){
    for (size_t i=0; i<leafs.size(); i++){
     Octree *lf=leafs[i];
       for (size_t j = 0; j < lf->agents.size(); j++){
+            std::cerr << "test2" << std::endl;
         if ((lf->position > lf->agents[j]->position[Agent::curr_state]) ||
          (lf->agents[j]->position[Agent::curr_state] >= (lf->position + Vector(1,1,1)*lf->width))){      
         lf->agents.erase(std::find(lf->agents.begin(),
           lf->agents.end(),
           lf->agents[j]));
         //lf->agents.remove(&agents[k]);
-        lf->delete_leaves();
         oc.add(*lf->agents[j]);
+            std::cerr << "test3" << std::endl;
+        lf->delete_leaves();
+            std::cerr << "test4" << std::endl;
       } else {
+            std::cerr << "test5" << std::endl;
          lf->agents[j]->leaf[Agent::curr_state]=lf;
+            std::cerr << "test5" << std::endl;
       }   
     }
       }
@@ -343,6 +341,7 @@ void Workspace::simulate(int nsteps) {
     while (step++ < nsteps) {
     //std::cout << "coco" << step << std::endl; 
       this->move(step);
+    std::cerr << "ok3" << std::endl;
       //tst.printOctree(& this->oc);
       // store every 20 steps
       if (step%1 == 0) save(step);
@@ -352,7 +351,9 @@ void Workspace::simulate(int nsteps) {
 void Workspace::save(int stepid) {
   std::ofstream myfile;
   LeafContainer leafs=Octree::leafs;
-  myfile.open("boids2.xyz", stepid==0 ? std::ios::out : std::ios::app);
+    std::cerr << "ok4" << std::endl;
+  myfile.open("boids.xyz", stepid==0 ? std::ios::out : std::ios::app);
+    std::cerr << "ok4" << std::endl;
 
     myfile << std::endl;
     myfile << na << std::endl;
