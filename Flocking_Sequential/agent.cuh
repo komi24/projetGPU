@@ -36,7 +36,11 @@ class Agent{
     static int curr_state;
 
 
-    Agent(const Vector &pos, const Vector &vel, const Vector &dir);
+    __device__ Agent(const Vector &pos, const Vector &vel, const Vector &dir, const int curr);
+
+    __host__ Agent(const Vector &pos, const Vector &vel, const Vector &dir);
+
+    __host__ __device__ Agent();
 
     __device__  Vector separation(Agent *agent_list, int sizeNeigh, 
             Real *dist, Real rad, int curr); 

@@ -2,7 +2,7 @@
 #define  WORKSPACE
 
 #include "octree.hxx"
-#include "agent.hxx"
+#include "agent.cuh"
 
 Real Octree::widthmin;
 LeafContainer Octree::leafs;

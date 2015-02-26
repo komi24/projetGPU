@@ -12,6 +12,7 @@
 
 #include <cuda.h>
 
+#define BUFF_SIZE 20
 
 Workspace::Workspace(ArgumentParser &parser)
 {
@@ -160,11 +161,13 @@ __global__ void computeOnGPU(int sizeNb, int sizeLf,
         Real rs, Real rc, Real ra, 
         Real wSeparation, Real wCohesion, Real wAlignment, 
         int curr, Real maxU,Real dt){
- int tileWidth = sizeNb/sizeLf;
+    int tileWidth = sizeNb/sizeLf;
+    __shared__ Real ds_neighInst[BUFF_SIZE*sizeof(Agent)/sizeof(Real)];
     __shared__ Agent *ds_neigh;
-    ds_neigh = (Agent*) malloc(sizeof(Agent)*(tileWidth)); // Faire gaffe un seul thread
-    __shared__ Real *ds_dist;
-    ds_dist = (Real *) malloc(sizeof(Real)*(tileWidth));
+    ds_neigh = (Agent *) ds_neighInst;
+    //ds_neigh = (Agent*) malloc(sizeof(Agent)*(tileWidth)); // Faire gaffe un seul thread
+    __shared__ Real ds_dist[BUFF_SIZE];
+    //ds_dist = (Real *) malloc(sizeof(Real)*(tileWidth));
     Vector s, c, a;
 
     //Chargement mémoire
@@ -182,6 +185,7 @@ __global__ void computeOnGPU(int sizeNb, int sizeLf,
     s =  separation(agts[blockIdx.x],ds_neigh,tileWidth, ds_dist, rs, curr);
     c = cohesion(agts[blockIdx.x],ds_neigh,tileWidth, ds_dist, rc, curr);
     a = alignment(agts[blockIdx.x],ds_neigh,tileWidth, ds_dist, ra, curr);
+
     agts[blockIdx.x].direction[1-curr] = c*wCohesion + a*wAlignment + s*wSeparation;
 
     agts[blockIdx.x].velocity[1-curr] = agts[blockIdx.x].velocity[curr] 
@@ -231,6 +235,9 @@ void Workspace::move(int step)//TODO erase step (just for tests)
          rSeparation,  rCohesion,  rAlignment, 
          wSeparation,  wCohesion,  wAlignment, 
          Agent::curr_state,maxU,dt);
+    cudaError err = cudaGetLastError();
+    if(cudaSuccess != err )
+        std::cerr << cudaGetErrorString(err) << std::endl;
     cudaThreadSynchronize();
     cudaMemcpy(leafArray,d_leafArray,sizeof(Agent)*leafs[i]->agents.size(), cudaMemcpyDeviceToHost);
   

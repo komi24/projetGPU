@@ -5,20 +5,31 @@
 int Agent::curr_state =0;
 
 
+__device__ Agent::Agent(const Vector &pos, const Vector &vel, const Vector &dir, const int curr){
+//TODO Use of position/velocity/direction lists ? + Parallelisr les opérations
+//sur direction/velocity/position
+  position[curr] = pos;
+  velocity[curr] = vel;
+  direction[curr] = dir;
+}
+
 Agent::Agent(const Vector &pos, const Vector &vel, const Vector &dir){
 //TODO Use of position/velocity/direction lists ? + Parallelisr les opérations
 //sur direction/velocity/position
-  position[this->curr_state] = pos;
-  velocity[this->curr_state] = vel;
-  direction[this->curr_state] = dir;
+  position[Agent::curr_state] = pos;
+  velocity[Agent::curr_state] = vel;
+  direction[Agent::curr_state] = dir;
+}
+
+__host__ __device__ Agent::Agent(){
 }
 
 
 
 __device__  Vector  Agent::separation(Agent *agent_list, int sizeNeigh, Real *dist, Real rad, int curr) {
 
-   // Vector force = Vector();
-    /*int count =0;
+   Vector force;
+    int count =0;
     for(size_t i = 0; i < sizeNeigh; i++) {
         //double dist = (this->position[this->curr_state] - agent_list[i]->position[this->curr_state]).norm();
         if ((dist[i] < rad) && (0<dist[i])) {
@@ -27,7 +38,7 @@ __device__  Vector  Agent::separation(Agent *agent_list, int sizeNeigh, Real *di
             ++count;
         }
     }
-    return ( count >0 ? force/count : force);*/
+    return ( count >0 ? force/count : force);
 //return force;
 }
 
