@@ -165,38 +165,40 @@ __global__ void computeOnGPU(int sizeNb, int sizeLf,
     __shared__ Real ds_neighInst[BUFF_SIZE*sizeof(Agent)/sizeof(Real)];//TODO mettre à zero les champs
     __shared__ Agent *ds_neigh;
     ds_neigh = (Agent *) ds_neighInst;
-    //ds_neigh = (Agent*) malloc(sizeof(Agent)*(tileWidth)); // Faire gaffe un seul thread
+    //ds_neigh = (Agent*) malloc(sizeof(Agent)*(tileWidth)); // TODO Faire gaffe un seul thread
     __shared__ Real ds_dist[BUFF_SIZE];
     //ds_dist = (Real *) malloc(sizeof(Real)*(tileWidth));
     Vector s, c, a;
 
-    //Chargement mémoire
-    for (int i= 0; i<tileWidth; i++){
-        ds_neigh[i]=neigh[blockIdx.x*tileWidth+i];
-    }
-    __syncthreads();
-    //Calcul des distances
-    for (int i= 0; i<tileWidth; i++){
-        ds_dist[i]=(agts[blockIdx.x].position[curr]-ds_neigh[blockIdx.x*tileWidth+i].position[curr]).norm();//TODO passer norm en __global__
-    }
-    __syncthreads();
-    //Calcul des forces 
-    //s =
-    s =  separation(agts[blockIdx.x],ds_neigh,tileWidth, ds_dist, rs, curr);
-    c = cohesion(agts[blockIdx.x],ds_neigh,tileWidth, ds_dist, rc, curr);
-    a = alignment(agts[blockIdx.x],ds_neigh,tileWidth, ds_dist, ra, curr);
+    for (int j=0; j<sizeLf; j++){
+        //Chargement mémoire
+        for (int i= 0; i<tileWidth; i++){
+            ds_neigh[i]=neigh[(blockIdx.x+j)*tileWidth+i];
+        }
+        __syncthreads();
+        //Calcul des distances
+        for (int i= 0; i<tileWidth; i++){
+            ds_dist[i]=(agts[blockIdx.x].position[curr]-ds_neigh[(blockIdx.x+j)*tileWidth+i].position[curr]).norm();//TODO passer norm en __global__
+        }
+        __syncthreads();
+        //Calcul des forces 
+        //s =
+        s =  separation(agts[blockIdx.x],ds_neigh,tileWidth, ds_dist, rs, curr);
+        c = cohesion(agts[blockIdx.x],ds_neigh,tileWidth, ds_dist, rc, curr);
+        a = alignment(agts[blockIdx.x],ds_neigh,tileWidth, ds_dist, ra, curr);
 
-    agts[blockIdx.x].direction[1-curr] = c*wCohesion + a*wAlignment + s*wSeparation;
+        agts[blockIdx.x].direction[1-curr] = c*wCohesion + a*wAlignment + s*wSeparation;
 
-    agts[blockIdx.x].velocity[1-curr] = agts[blockIdx.x].velocity[curr] 
-        + agts[blockIdx.x].direction[1-curr];
-     float speed =agts[blockIdx.x].velocity[1-curr].norm();
-       if ((speed > maxU)) {
-         agts[blockIdx.x].velocity[1-curr] = agts[blockIdx.x].velocity[1-curr] * maxU/speed;
-      }
-      agts[blockIdx.x].position[1-curr] = agts[blockIdx.x].position[curr] + agts[blockIdx.x].velocity[curr]*dt;
-      
-    __syncthreads();
+        agts[blockIdx.x].velocity[1-curr] = agts[blockIdx.x].velocity[curr] 
+            + agts[blockIdx.x].direction[1-curr];
+        float speed =agts[blockIdx.x].velocity[1-curr].norm();
+        if ((speed > maxU)) {
+            agts[blockIdx.x].velocity[1-curr] = agts[blockIdx.x].velocity[1-curr] * maxU/speed;
+        }
+        agts[blockIdx.x].position[1-curr] = agts[blockIdx.x].position[curr] + agts[blockIdx.x].velocity[curr]*dt;
+
+        __syncthreads();
+    }
   
 }
 
@@ -294,7 +296,6 @@ void Workspace::update(){
    for (size_t i=0; i<leafs.size(); i++){
     Octree *lf=leafs[i];
       for (size_t j = 0; j < lf->agents.size(); j++){
-            std::cerr << "test2" << std::endl;
         if ((lf->position > lf->agents[j]->position[Agent::curr_state]) ||
          (lf->agents[j]->position[Agent::curr_state] >= (lf->position + Vector(1,1,1)*lf->width))){      
         lf->agents.erase(std::find(lf->agents.begin(),
