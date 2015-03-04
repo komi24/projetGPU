@@ -1,4 +1,4 @@
-NVCC=/usr/local/cuda-6.0/bin/nvcc  -ccbin g++ -m64
+NVCC=/usr/local/cuda-6.5/bin/nvcc -G -g -arch sm_12  -ccbin g++ -m64
 CXX = g++
 CXXFLAGS =  -Wall
 SRCS = $(wildcard *.cxx)

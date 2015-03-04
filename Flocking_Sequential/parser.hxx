@@ -27,6 +27,12 @@ public:
     return static_cast<double>(atof(content.c_str()));
   }
 
+  float asFloat(float def=0) const
+  {
+    if (content == "") return def;
+    return static_cast<float>(atof(content.c_str()));
+  }
+
   int asInt(int def=0) const
   {
     if (content == "") return def;

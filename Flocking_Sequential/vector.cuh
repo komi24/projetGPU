@@ -15,7 +15,11 @@ class Vector
     Real x, y ,z;
 
     // Default constructor
-   __device__ __host__  Vector(){}
+   __device__ __host__  Vector(){
+    this->x =0;
+    this->y =0;
+    this->z =0;
+   }
 
     // Constructor from three real numbers
    __device__ __host__  Vector(Real x0, Real y0, Real z0){
@@ -61,12 +65,12 @@ class Vector
     }
 
    __device__ __host__  Vector operator/( Real s ) const {
-      Real inv = 1.0 / s;
+      Real inv = (s>EPSILON) ? 1.0 / s : 2;
       return Vector( x * inv, y * inv, z * inv );
     }
 
    __device__ __host__  Vector& operator/=( Real s ) {
-      Real inv = 1.0 / s;
+      Real inv = (s>EPSILON) ? 1.0 / s : 2;
       x *= inv;
       y *= inv;
       z *= inv;
@@ -100,13 +104,13 @@ class Vector
     }
 
     __device__ __host__ Vector normalized(){
-      double inorm = (this->norm() != 0) ? 1./this->norm() : 1;
+      float inorm = (this->norm() > EPSILON) ? 1./this->norm() : 2;
     
       return Vector(x*inorm,y*inorm,z*inorm);
     }
 
     __device__ __host__ void normalize(){
-      double inorm = 1./this->norm();
+      float inorm = (this->norm() > EPSILON) ? 1./this->norm() : 2;
       x*=inorm;y*=inorm;z*=inorm;
     }
 

@@ -19,13 +19,13 @@ Workspace::Workspace(ArgumentParser &parser)
 
   na = parser("agents").asInt();
 
-  wCohesion = parser("wc").asDouble();
-  wAlignment = parser("wa").asDouble();
-  wSeparation = parser("ws").asDouble();
+  wCohesion = parser("wc").asFloat();
+  wAlignment = parser("wa").asFloat();
+  wSeparation = parser("ws").asFloat();
 
-  rCohesion = parser("rc").asDouble();
-  rAlignment = parser("ra").asDouble();
-  rSeparation = parser("rs").asDouble();
+  rCohesion = parser("rc").asFloat();
+  rAlignment = parser("ra").asFloat();
+  rSeparation = parser("rs").asFloat();
   dt= 0.05;
   maxU = 2.0;
   time = 0.,//;
@@ -85,7 +85,7 @@ void  Workspace::init(){
 }
 
 Agent *Workspace::tempToArray(TemporaryContainer tp){
- std::cerr << " CPU" << std::endl;
+ //std::cerr << " CPU" << std::endl;
   Agent *res = (Agent*) malloc(tp.size()*sizeof(Agent));
   for(int i =0; i<tp.size(); i++){
     res[i]=*tp[i];
@@ -98,7 +98,7 @@ Agent *Workspace::tempToArray(TemporaryContainer tp){
 
 void Workspace::arrayToTemp(Agent *agts, int s,TemporaryContainer &leaf){
   leaf.clear();
- std::cerr << " GPU" << std::endl;
+ //std::cerr << " GPU" << std::endl;
   for(int i =0; i<s; i++)
   {
     leaf.push_back(&agts[i]);
@@ -119,32 +119,36 @@ __device__  Vector separation(Agent &a, Agent *agent_list, int sizeNeigh, Real *
         //double dist = (a.position[this->curr_state] - agent_list[i]->position[this->curr_state]).norm();
         if ((dist[i] < rad) && (0<dist[i])) {
             // TODO the comparison is no longer needed //
+            //force -= a.position[curr] - agent_list[i].position[curr];
             force -= (a.position[curr] - agent_list[i].position[curr]).normalized();
             ++count;
         }
     }
-    return ( count >0 ? force/count : force);
+    force.x =0.02;
+    return force;//( count >0 ? force/count : force);
 
 }
 
 
 __device__ Vector cohesion(Agent &a,Agent *agent_list, int sizeNeigh, Real *dist, Real rad, int curr) {
 
-    Vector force;
+    Vector force = Vector();
     int count = 0;
     for(size_t i = 0; i < sizeNeigh; i++) {
         //double dist = (a.position[this->curr_state] - agent_list[i]->position[this->curr_state]).norm();
         if ((dist[i] < rad) && (0<dist[i])) {
             // TODO the comparison is no longer needed //
             force += agent_list[i].position[curr];
+            //force += a.position[curr] - agent_list[i].position[curr];
             ++count;
         }
     }
-    return ( count >0 ? force/count : force);
+    force.x =0.2;
+    return force;//( count >0 ? force/count : force);
 }
 
 __device__ Vector alignment(Agent &a,Agent *agent_list, int sizeNeigh, Real *dist, Real rad, int curr) {
-    Vector force;
+    Vector force = Vector();
     int count = 0;
     for(size_t i = 0; i < sizeNeigh; i++) {
         if ((dist[i] < rad) && (0<dist[i])) {
@@ -153,7 +157,8 @@ __device__ Vector alignment(Agent &a,Agent *agent_list, int sizeNeigh, Real *dis
             ++count;
         }
     }
-    return ( count >0 ? force/count : force);
+    force.x =0.2;
+    return force;//( count >0 ? force/count : force);
 }
 
 __global__ void computeOnGPU(int sizeNb, int sizeLf, 
@@ -161,7 +166,8 @@ __global__ void computeOnGPU(int sizeNb, int sizeLf,
         Real rs, Real rc, Real ra, 
         Real wSeparation, Real wCohesion, Real wAlignment, 
         int curr, Real maxU,Real dt){
-    int tileWidth = sizeNb/sizeLf;
+
+    int tileWidth = (sizeNb/sizeLf < BUFF_SIZE) ? sizeNb/sizeLf : BUFF_SIZE;
     __shared__ Real ds_neighInst[BUFF_SIZE*sizeof(Agent)/sizeof(Real)];//TODO mettre à zero les champs
     __shared__ Agent *ds_neigh;
     ds_neigh = (Agent *) ds_neighInst;
@@ -172,44 +178,50 @@ __global__ void computeOnGPU(int sizeNb, int sizeLf,
 
     for (int j=0; j<sizeLf; j++){
         //Chargement mémoire
-        for (int i= 0; i<tileWidth; i++){
+        for (int i= 0; (i<tileWidth) && ((blockIdx.x+j)*tileWidth+i<sizeNb); i++){
             ds_neigh[i]=neigh[(blockIdx.x+j)*tileWidth+i];
         }
         __syncthreads();
         //Calcul des distances
-        for (int i= 0; i<tileWidth; i++){
+        for (int i= 0; i<tileWidth && ((blockIdx.x+j)*tileWidth+i<sizeNb); i++){
             ds_dist[i]=(agts[blockIdx.x].position[curr]-ds_neigh[(blockIdx.x+j)*tileWidth+i].position[curr]).norm();//TODO passer norm en __global__
         }
         __syncthreads();
         //Calcul des forces 
         //s =
-        s =  separation(agts[blockIdx.x],ds_neigh,tileWidth, ds_dist, rs, curr);
-        c = cohesion(agts[blockIdx.x],ds_neigh,tileWidth, ds_dist, rc, curr);
-        a = alignment(agts[blockIdx.x],ds_neigh,tileWidth, ds_dist, ra, curr);
-
-        agts[blockIdx.x].direction[1-curr] = c*wCohesion + a*wAlignment + s*wSeparation;
-
-        agts[blockIdx.x].velocity[1-curr] = agts[blockIdx.x].velocity[curr] 
-            + agts[blockIdx.x].direction[1-curr];
-        float speed =agts[blockIdx.x].velocity[1-curr].norm();
-        if ((speed > maxU)) {
-            agts[blockIdx.x].velocity[1-curr] = agts[blockIdx.x].velocity[1-curr] * maxU/speed;
-        }
-        agts[blockIdx.x].position[1-curr] = agts[blockIdx.x].position[curr] + agts[blockIdx.x].velocity[curr]*dt;
-
-        __syncthreads();
+        s += separation(agts[blockIdx.x],ds_neigh,tileWidth, ds_dist, rs, curr);
+        c += cohesion(agts[blockIdx.x],ds_neigh,tileWidth, ds_dist, rc, curr);
+        a += alignment(agts[blockIdx.x],ds_neigh,tileWidth, ds_dist, ra, curr);
     }
-  
+    agts[blockIdx.x].direction[1-curr] = c*wCohesion + a*wAlignment + s*wSeparation;
+
+    agts[blockIdx.x].velocity[1-curr] = agts[blockIdx.x].velocity[curr] 
+        + agts[blockIdx.x].direction[1-curr];
+    float speed =agts[blockIdx.x].velocity[1-curr].norm();
+    if ((speed > maxU)) {
+        agts[blockIdx.x].velocity[1-curr] = agts[blockIdx.x].velocity[1-curr] * maxU/speed;
+    }
+    agts[blockIdx.x].position[1-curr] = agts[blockIdx.x].position[curr] + agts[blockIdx.x].velocity[curr]*dt;
+
+    __syncthreads();
 }
 
 void Workspace::move(int step)//TODO erase step (just for tests)
 {
 
+  cudaDeviceProp deviceProp;
+  cudaGetDeviceProperties(&deviceProp,0);
+  int memDisp = deviceProp.totalGlobalMem;
+  int memOccup = 0;
+  
   Vector s,c,a;  
   LeafContainer leafs = Octree::leafs;
   TemporaryContainer nb;
   //std::cout << " leaves "<< Octree::leafs.size() << std::endl;
-  for (size_t i=0; i<leafs.size(); i++){
+  size_t i=0; 
+  std::vector<Agent **> parallelLfArray;
+  std::vector<Agent **> d_parallelLfArray;
+  while (i<leafs.size()){
     Octree *it=leafs[i];
     nb.clear();
     (it)->returnNeighboursLeaf(nb);
@@ -224,9 +236,18 @@ void Workspace::move(int step)//TODO erase step (just for tests)
 
     //TODO penser à supprimer les liste d'agents copiées
     cudaMalloc((void **)&d_neighArray,sizeof(Agent)*nb.size());
+    cudaError err = cudaGetLastError();
+    if(cudaSuccess != err )
+        std::cerr << cudaGetErrorString(err) << std::endl;
     cudaMalloc((void **)&d_leafArray,sizeof(Agent)*leafs[i]->agents.size());
+    if(cudaSuccess != err )
+        std::cerr << cudaGetErrorString(err) << std::endl;
     cudaMemcpy(d_neighArray,neighArray,sizeof(Agent)*nb.size(), cudaMemcpyHostToDevice);
+    if(cudaSuccess != err )
+        std::cerr << cudaGetErrorString(err) << std::endl;
     cudaMemcpy(d_leafArray,leafArray,sizeof(Agent)*leafs[i]->agents.size(), cudaMemcpyHostToDevice);
+    if(cudaSuccess != err )
+        std::cerr << cudaGetErrorString(err) << std::endl;
     
     //Initialiser la grille
     dim3 dimGrid(leafs[i]->agents.size(),1,1);
@@ -237,9 +258,10 @@ void Workspace::move(int step)//TODO erase step (just for tests)
          rSeparation,  rCohesion,  rAlignment, 
          wSeparation,  wCohesion,  wAlignment, 
          Agent::curr_state,maxU,dt);
-    cudaError err = cudaGetLastError();
     if(cudaSuccess != err )
         std::cerr << cudaGetErrorString(err) << std::endl;
+    // FIN FOR
+
     cudaThreadSynchronize();
     cudaMemcpy(leafArray,d_leafArray,sizeof(Agent)*leafs[i]->agents.size(), cudaMemcpyDeviceToHost);
 
@@ -257,6 +279,9 @@ void Workspace::move(int step)//TODO erase step (just for tests)
 
        Agent *it2=leafs[i]->agents[j];
 
+      //if(isnan(fmod(it2->position[1-Agent::curr_state].x,domainsize))) std::cout << "bof" << it2->position[1-Agent::curr_state].x << std::endl;
+      //std::cout << "bofx" << it2->position[1-Agent::curr_state].x << std::endl;
+      //std::cout << "vofx" << it2->velocity[1-Agent::curr_state].x << std::endl;
       (it2)->position[1-Agent::curr_state].x= fmod((it2)->position[1-Agent::curr_state].x,domainsize);
       (it2)->position[1-Agent::curr_state].y= fmod((it2)->position[1-Agent::curr_state].y,domainsize);
       (it2)->position[1-Agent::curr_state].z= fmod((it2)->position[1-Agent::curr_state].z,domainsize);
@@ -266,9 +291,10 @@ void Workspace::move(int step)//TODO erase step (just for tests)
     }
 
     Agent::curr_state = 1 - Agent::curr_state;
-    std::cerr << "ok1" << std::endl;
+    //std::cerr << "ok1" << std::endl;
     update();
-    std::cerr << "ok2" << std::endl;
+    //std::cerr << "ok2" << std::endl;
+    i++;//TODO A changer retirer
 }
 
 void Workspace::returnNeighboursBuffer(TemporaryContainer &nb, Agent *agent,
@@ -296,22 +322,23 @@ void Workspace::update(){
    for (size_t i=0; i<leafs.size(); i++){
     Octree *lf=leafs[i];
       for (size_t j = 0; j < lf->agents.size(); j++){
-        if ((lf->position > lf->agents[j]->position[Agent::curr_state]) ||
-         (lf->agents[j]->position[Agent::curr_state] >= (lf->position + Vector(1,1,1)*lf->width))){      
+          Agent *ag = lf->agents[j];
+          //std::cerr << "test3 " << ag->position[Agent::curr_state] << " " << lf->position << std::endl;
+        if (!(lf->agents[j]->position[Agent::curr_state] > lf->position) ||
+         !((lf->position + Vector(1,1,1)*lf->width)>= lf->agents[j]->position[Agent::curr_state] )){      
         lf->agents.erase(std::find(lf->agents.begin(),
           lf->agents.end(),
           lf->agents[j]));
         //lf->agents.remove(&agents[k]);
-        oc.add(*lf->agents[j]);
-            std::cerr << "test3" << std::endl;
+        oc.add(*ag);//*lf->agents[j]);
         lf->delete_leaves();
-            std::cerr << "test4" << std::endl;
+            //std::cerr << "test4" << std::endl;
       } else {
-            std::cerr << "test5" << std::endl;
+            //std::cerr << "test5" << std::endl;
          lf->agents[j]->leaf[Agent::curr_state]=lf;
-            std::cerr << "test5" << std::endl;
       }   
     }
+        //std::cerr << "test5" << std::endl;
       }
 
   /*for(size_t k = 0; k< na; k++){
@@ -342,19 +369,19 @@ void Workspace::simulate(int nsteps) {
     while (step++ < nsteps) {
     //std::cout << "coco" << step << std::endl; 
       this->move(step);
-    std::cerr << "ok3" << std::endl;
+    //std::cerr << "ok3" << std::endl;
       //tst.printOctree(& this->oc);
       // store every 20 steps
-      if (step%1 == 0) save(step);
+      if (step%5 == 0) save(step);
     }
 }
 
 void Workspace::save(int stepid) {
   std::ofstream myfile;
   LeafContainer leafs=Octree::leafs;
-    std::cerr << "ok4" << std::endl;
+    //std::cerr << "ok4" << std::endl;
   myfile.open("boids.xyz", stepid==0 ? std::ios::out : std::ios::app);
-    std::cerr << "ok4" << std::endl;
+    //std::cerr << "ok4" << std::endl;
 
     myfile << std::endl;
     myfile << na << std::endl;
